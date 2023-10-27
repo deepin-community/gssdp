@@ -1,3 +1,60 @@
+1.6.2 (stable)
+==============
+ - Propagate random port up to client, partial fix for GUPnP/81
+ - Add manpage for sniffer
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+
+1.6.1 (stable)
+==============
+ - Potential fix for sending discovery responses with the wrong
+   location
+ - Properly parse netlink messages in neighbour discovery
+ - Do not leak the host mask if it was alreay provided on object client
+   creation
+ - Fix install path for generated documentation
+ - Fix warning message for link-local v4 addresses
+
+Bugs fixed in this release:
+ - https://gitlab.gnome.org/GNOME/gssdp/issues/22
+ - https://gitlab.gnome.org/GNOME/gssdp/issues/24
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+
+1.6.0 (stable)
+==============
+ - Re-release of 1.5.2 as stable version. No functional changes
+
+1.5.2 (unstable)
+================
+ - Enable global scope v6 addresses
+ - Expose Client:address as proper property
+ - Clean-up client properties, make some construct-only
+ - Add new convenience constructors for client
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+
+1.5.1 (unstable)
+================
+ - Clean-up debug output
+ - Allow interface indexes up to MAXINT
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+ - Olivier Crête <olivier.crete@collabora.com>
+
+1.5.0 (unstable)
+================
+ - Switch to libsoup3
+ - Bump API and ABI
+ - Deprecate Client:msearch-port property for Client:port
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+
 1.4.0 (stable)
 ==============
  - Fix building the sniffer when built as subproject
