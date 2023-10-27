@@ -1,4 +1,4 @@
-project('gssdp', 'c', version: '1.4.0.1', meson_version : '>= 0.54.0')
+project('gssdp', 'c', version: '1.6.2', meson_version : '>= 0.54.0')
 gnome = import('gnome')
 pkg = import('pkgconfig')
 
@@ -6,6 +6,9 @@ cc = meson.get_compiler('c')
 
 conf = configuration_data()
 conf.set_quoted('VERSION', meson.project_version())
+
+GSSDP_API_VERSION='1.6'
+GSSDP_API_NAME='gssdp-@0@'.format(GSSDP_API_VERSION)
 
 # Check for struct in_pktinfo
 pktinfo_test = '''#define _GNU_SOURCE
@@ -39,10 +42,10 @@ conf.set('HAVE_SIOCGIFINDEX', siocgifindex_available)
 getipnettable2_available = cc.compiles(files('build-aux/getipnettable2-test.c'), args: '-liphlpapi', name: 'GetIpNetTable2 is available')
 conf.set('HAVE_GETIPNETTABLE2', getipnettable2_available)
 
-
-glib_version = '2.54'
+glib_version = '2.70'
 conf.set('GLIB_VERSION_MIN_REQUIRED', 'GLIB_VERSION_@0@'.format(glib_version.underscorify()))
 conf.set('GLIB_VERSION_MAX_ALLOWED', 'GLIB_VERSION_@0@'.format(glib_version.underscorify()))
+
 
 
 # Generate config.h, so all config has to be set up until here
@@ -73,7 +76,7 @@ dependencies = [
     dependency('glib-2.0', version : '>= ' + glib_version),
     dependency('gobject-2.0', version : '>= ' + glib_version),
     dependency('gio-2.0', version : '>= ' + glib_version),
-    dependency('libsoup-2.4', version : '>= 2.26.1')
+    dependency('libsoup-3.0', version : '>= 2.99.0')
 ]
 
 subdir('libgssdp')
@@ -94,9 +97,7 @@ gidocgen_dep = dependency('gi-docgen', version: '>= 2021.1',
                           required: get_option('gtk_doc') and get_option('introspection')
                       )
 
-if get_option('gtk_doc')
-  subdir('doc')
-endif
+subdir('doc')
 
 if get_option('examples')
   subdir('examples')

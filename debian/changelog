@@ -1,3 +1,56 @@
+gssdp (1.6.2-2) unstable; urgency=medium
+
+  * Don't build gssdp-tools on i386 since pandoc isn't available there on Ubuntu
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 21 Nov 2022 19:01:09 -0500
+
+gssdp (1.6.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * Build-Depend on pandoc to build the manpage for gssdp-tools
+  * Stop building gssdp-tools on sh4 since pandoc isn't available there
+  * Set Rules-Requires-Root: no
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 21 Nov 2022 07:23:37 -0500
+
+gssdp (1.6.1-1) unstable; urgency=medium
+
+  [ Jeremy Bicha ]
+  * New upstream release
+  * Build-Depend on gi-docgen instead of gtk-doc-tools
+  * Drop patch: applied in new release
+  * Update debian/copyright
+
+  [ Debian Janitor ]
+  * Set upstream metadata fields
+  * Update standards version to 4.6.1, no changes needed.
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Sat, 19 Nov 2022 10:08:07 -0500
+
+gssdp (1.6.0-3) unstable; urgency=medium
+
+  * Team upload.
+  * Upload to unstable. (See #1022003)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 30 Oct 2022 14:51:16 +0100
+
+gssdp (1.6.0-2) experimental; urgency=medium
+
+  * Add debian/patches/Net-Posix-Use-correct-macro-to-parse-netlink-msgs.patch
+    - cherry-picked from upstream
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 24 Oct 2022 18:27:44 +0200
+
+gssdp (1.6.0-1) experimental; urgency=medium
+
+  * Team upload.
+  * New upstream release
+  * Rename packages for 1.2->1.6 API/ABI bump
+  * Switch (build-)deps to libsoup-3.0
+  * Update symbols with new additions
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 18 Oct 2022 20:14:13 +0200
+
 gssdp (1.4.0.1-2) unstable; urgency=medium
 
   * Only build gssdp-tools on arches where gtk4 is available

@@ -55,6 +55,7 @@
 
 static GInetAddress *SSDP_V6_LL_ADDR = NULL;
 static GInetAddress *SSDP_V6_SL_ADDR = NULL;
+static GInetAddress *SSDP_V6_GL_ADDR = NULL;
 static GInetAddress *SSDP_V4_ADDR = NULL;
 
 static void
@@ -109,7 +110,8 @@ struct _GSSDPHeaderField {
 };
 typedef struct _GSSDPHeaderField GSSDPHeaderField;
 
-enum {
+enum
+{
         PROP_0,
         PROP_SERVER_ID,
         PROP_IFACE,
@@ -123,6 +125,8 @@ enum {
         PROP_UDA_VERSION,
         PROP_BOOT_ID,
         PROP_CONFIG_ID,
+        PROP_PORT,
+        PROP_HOST_ADDR,
 };
 
 enum {
@@ -266,6 +270,13 @@ gssdp_client_initable_init (GInitable                   *initable,
                                          NULL));
 
         if (priv->search_socket != NULL) {
+                if (priv->msearch_port == 0) {
+                        g_object_get (priv->search_socket,
+                                      "port",
+                                      &priv->msearch_port,
+                                      NULL);
+                }
+
                 gssdp_socket_source_set_callback
                                         (priv->search_socket,
                                          (GSourceFunc) search_socket_source_cb,
@@ -326,6 +337,9 @@ gssdp_client_get_property (GObject    *object,
                 g_value_set_string (value,
                                     gssdp_client_get_host_ip (client));
                 break;
+        case PROP_HOST_ADDR:
+                g_value_set_object (value, gssdp_client_get_address (client));
+                break;
         case PROP_ACTIVE:
                 g_value_set_boolean (value, priv->active);
                 break;
@@ -333,6 +347,7 @@ gssdp_client_get_property (GObject    *object,
                 g_value_set_uint (value, priv->socket_ttl);
                 break;
         case PROP_MSEARCH_PORT:
+        case PROP_PORT:
                 g_value_set_uint (value, priv->msearch_port);
                 break;
         case PROP_ADDRESS_FAMILY:
@@ -374,14 +389,11 @@ gssdp_client_set_property (GObject      *object,
                 priv->device.network = g_value_dup_string (value);
                 break;
         case PROP_HOST_IP:
-                {
-                        const char *addr = g_value_get_string (value);
-                        if (addr != NULL) {
-                                priv->device.host_addr =
-                                    g_inet_address_new_from_string (addr);
-                        }
-                        break;
-                }
+                priv->device.host_ip = g_value_dup_string (value);
+                break;
+        case PROP_HOST_ADDR:
+                priv->device.host_addr = g_value_dup_object (value);
+                break;
         case PROP_HOST_MASK:
                 priv->device.host_mask = g_value_dup_object (value);
                 break;
@@ -392,6 +404,7 @@ gssdp_client_set_property (GObject      *object,
                 priv->socket_ttl = g_value_get_uint (value);
                 break;
         case PROP_MSEARCH_PORT:
+        case PROP_PORT:
                 priv->msearch_port = g_value_get_uint (value);
                 break;
         case PROP_ADDRESS_FAMILY:
@@ -491,9 +504,7 @@ gssdp_client_class_init (GSSDPClientClass *klass)
                           NULL,
                           G_PARAM_READWRITE |
                           G_PARAM_CONSTRUCT_ONLY |
-                          G_PARAM_STATIC_NAME |
-                          G_PARAM_STATIC_NICK |
-                          G_PARAM_STATIC_BLURB));
+                          G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:network:(attributes org.gtk.Property.get=gssdp_client_get_network):
@@ -505,55 +516,69 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          * the network. Otherwise, expect this to be the network IP address by
          * default.
          **/
-        g_object_class_install_property
-                (object_class,
-                 PROP_NETWORK,
-                 g_param_spec_string
-                         ("network",
-                          "Network ID",
-                          "The network this client is currently connected to.",
-                          NULL,
-                          G_PARAM_READWRITE |
-                          G_PARAM_CONSTRUCT |
-                          G_PARAM_STATIC_NAME |
-                          G_PARAM_STATIC_NICK |
-                          G_PARAM_STATIC_BLURB));
+        g_object_class_install_property (
+                object_class,
+                PROP_NETWORK,
+                g_param_spec_string (
+                        "network",
+                        "Network ID",
+                        "The network this client is currently connected to.",
+                        NULL,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:host-ip:(attributes org.gtk.Property.get=gssdp_client_get_host_ip):
          *
          * The IP address of the assoicated network interface.
+         *
+         * Deprecated: 1.6. Use [property@GSSDP.Client:address] instead.
          **/
-        g_object_class_install_property
-                (object_class,
-                 PROP_HOST_IP,
-                 g_param_spec_string ("host-ip",
-                                      "Host IP",
-                                      "The IP address of the associated"
-                                      "network interface",
-                                      NULL,
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_CONSTRUCT |
-                                      G_PARAM_STATIC_NAME |
-                                      G_PARAM_STATIC_NICK |
-                                      G_PARAM_STATIC_BLURB));
+        g_object_class_install_property (
+                object_class,
+                PROP_HOST_IP,
+                g_param_spec_string ("host-ip",
+                                     "Host IP",
+                                     "The IP address of the associated"
+                                     "network interface",
+                                     NULL,
+                                     G_PARAM_READWRITE |
+                                             G_PARAM_CONSTRUCT_ONLY |
+                                             G_PARAM_STATIC_STRINGS));
+
+        /**
+         * GSSDPClient:address:(attributes org.gtk.Property.get=gssdp_client_get_address):
+         *
+         * The network address this client is bound to.
+         * Since: 1.6
+         **/
+        g_object_class_install_property (
+                object_class,
+                PROP_HOST_ADDR,
+                g_param_spec_object ("address",
+                                     "Network address",
+                                     "The internet address of the client",
+                                     G_TYPE_INET_ADDRESS,
+                                     G_PARAM_READWRITE |
+                                             G_PARAM_CONSTRUCT_ONLY |
+                                             G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:host-mask:(attributes org.gtk.Property.get=gssdp_client_get_address_mask):
          *
          * The network mask of the assoicated network interface.
          **/
-        g_object_class_install_property
-                (object_class,
-                 PROP_HOST_MASK,
-                 g_param_spec_object ("host-mask",
-                                      "Host network mask",
-                                      "The IP netmask of the associated"
-                                      "network interface",
-                                      G_TYPE_INET_ADDRESS_MASK,
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_CONSTRUCT |
-                                      G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_HOST_MASK,
+                g_param_spec_object ("host-mask",
+                                     "Host network mask",
+                                     "The IP netmask of the associated"
+                                     "network interface",
+                                     G_TYPE_INET_ADDRESS_MASK,
+                                     G_PARAM_READWRITE |
+                                             G_PARAM_CONSTRUCT_ONLY |
+                                             G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:active:(attributes org.gtk.Property.get=gssdp_client_get_active):
@@ -563,18 +588,15 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          * not. In most cases, you don't want to touch this property.
          *
          **/
-        g_object_class_install_property
-                (object_class,
-                 PROP_ACTIVE,
-                 g_param_spec_boolean
-                         ("active",
-                          "Active",
-                          "TRUE if the client is active.",
-                          TRUE,
-                          G_PARAM_READWRITE |
-                          G_PARAM_STATIC_NAME |
-                          G_PARAM_STATIC_NICK |
-                          G_PARAM_STATIC_BLURB));
+        g_object_class_install_property (
+                object_class,
+                PROP_ACTIVE,
+                g_param_spec_boolean ("active",
+                                      "Active",
+                                      "TRUE if the client is active.",
+                                      TRUE,
+                                      G_PARAM_READWRITE |
+                                              G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:socket-ttl:
@@ -583,18 +605,17 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          * If not set (or set to 0) the value recommended by UPnP will be used.
          * This property can only be set during object construction.
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_SOCKET_TTL,
-                 g_param_spec_uint
-                        ("socket-ttl",
-                         "Socket TTL",
-                         "Time To Live for client's sockets",
-                         0, 255,
-                         0,
-                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
-                         G_PARAM_STATIC_NAME | G_PARAM_STATIC_NICK |
-                         G_PARAM_STATIC_BLURB));
+        g_object_class_install_property (
+                object_class,
+                PROP_SOCKET_TTL,
+                g_param_spec_uint ("socket-ttl",
+                                   "Socket TTL",
+                                   "Time To Live for client's sockets",
+                                   0,
+                                   255,
+                                   0,
+                                   G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                           G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:msearch-port:
@@ -602,20 +623,41 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          * UDP port to use for sending multicast M-SEARCH requests on the
          * network. If not set (or set to 0) a random port will be used.
          * This property can be only set during object construction.
+         *
+         * Deprecated: 1.6.0: Use [property@GSSDP.Client:port] instead
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_MSEARCH_PORT,
-                 g_param_spec_uint
-                        ("msearch-port",
-                         "M-SEARCH port",
-                         "UDP port to use for M-SEARCH requests",
-                         0, G_MAXUINT16,
-                         0,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT_ONLY |
-                         G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_MSEARCH_PORT,
+                g_param_spec_uint ("msearch-port",
+                                   "M-SEARCH port",
+                                   "UDP port to use for M-SEARCH requests",
+                                   0,
+                                   G_MAXUINT16,
+                                   0,
+                                   G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                           G_PARAM_STATIC_STRINGS));
 
+        /**
+         * GSSDPClient:port:
+         *
+         * UDP port to use for sending multicast M-SEARCH requests on the
+         * network. If not set (or set to 0) a random port will be used.
+         * This property can be only set during object construction.
+         *
+         * Since: 1.6.0
+         */
+        g_object_class_install_property (
+                object_class,
+                PROP_PORT,
+                g_param_spec_uint ("port",
+                                   "M-SEARCH port",
+                                   "UDP port to use for M-SEARCH requests",
+                                   0,
+                                   G_MAXUINT16,
+                                   0,
+                                   G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                           G_PARAM_STATIC_STRINGS));
         /**
          * GSSDPClient:address-family:(attributes org.gtk.Property.get=gssdp_client_get_family):
          *
@@ -624,23 +666,22 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          * used to determine the proper address.
          *
          * If not specified, will contain the currrent address family after
-         * the call to g_initable_init()<!-- -->. Use %G_SOCKET_FAMILY_INVALID
+         * the call to [method@Glib.Initable.init]. Use %G_SOCKET_FAMILY_INVALID
          * to specifiy using the default socket family (legacy IP)
          *
          * Since: 1.2.0
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_ADDRESS_FAMILY,
-                 g_param_spec_enum
-                        ("address-family",
-                         "IP Address family",
-                         "IP address family to prefer when creating the client",
-                         G_TYPE_SOCKET_FAMILY,
-                         G_SOCKET_FAMILY_INVALID,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT_ONLY |
-                         G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_ADDRESS_FAMILY,
+                g_param_spec_enum (
+                        "address-family",
+                        "IP Address family",
+                        "IP address family to prefer when creating the client",
+                        G_TYPE_SOCKET_FAMILY,
+                        G_SOCKET_FAMILY_INVALID,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:uda-version:(attributes org.gtk.Property.get=gssdp_client_get_uda_version):
@@ -649,18 +690,17 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          *
          * Since: 1.2.0
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_UDA_VERSION,
-                 g_param_spec_enum
-                        ("uda-version",
-                         "UDA version",
-                         "UPnP Device Architecture version on this client",
-                         GSSDP_TYPE_UDA_VERSION,
-                         GSSDP_UDA_VERSION_1_0,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT_ONLY |
-                         G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_UDA_VERSION,
+                g_param_spec_enum (
+                        "uda-version",
+                        "UDA version",
+                        "UPnP Device Architecture version on this client",
+                        GSSDP_TYPE_UDA_VERSION,
+                        GSSDP_UDA_VERSION_1_0,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                                G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:boot-id:(attributes org.gtk.Property.set=gssdp_client_set_boot_id):
@@ -669,19 +709,17 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          *
          * Since 1.2.0
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_BOOT_ID,
-                 g_param_spec_int
-                        ("boot-id",
-                         "current boot-id value",
-                         "Value of the BOOTID.UPNP.ORG header",
-                         -1,
-                         G_MAXINT32,
-                         -1,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT |
-                         G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_BOOT_ID,
+                g_param_spec_int ("boot-id",
+                                  "current boot-id value",
+                                  "Value of the BOOTID.UPNP.ORG header",
+                                  -1,
+                                  G_MAXINT32,
+                                  -1,
+                                  G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
+                                          G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient:config-id:(attributes org.gtk.Property.set=gssdp_client_set_config_id):
@@ -690,19 +728,17 @@ gssdp_client_class_init (GSSDPClientClass *klass)
          *
          * Since 1.2.0
          */
-        g_object_class_install_property
-                (object_class,
-                 PROP_CONFIG_ID,
-                 g_param_spec_int
-                        ("config-id",
-                         "current config-id value",
-                         "Value of the CONFIGID.UPNP.ORG header",
-                         -1,
-                         G_MAXINT32,
-                         -1,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT |
-                         G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property (
+                object_class,
+                PROP_CONFIG_ID,
+                g_param_spec_int ("config-id",
+                                  "current config-id value",
+                                  "Value of the CONFIGID.UPNP.ORG header",
+                                  -1,
+                                  G_MAXINT32,
+                                  -1,
+                                  G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
+                                          G_PARAM_STATIC_STRINGS));
 
         /**
          * GSSDPClient::message-received: (skip)
@@ -733,13 +769,17 @@ gssdp_client_class_init (GSSDPClientClass *klass)
 
 /**
  * gssdp_client_new:
- * @iface: (nullable): The name of the network interface, or %NULL for auto-detection.
+ * @iface: (nullable): The name of the network interface, or %NULL for
+ * auto-detection.
  * @error: (nullable): Location to store error, or %NULL
  *
  * Creates a GSSDP client on @iface. GSSDPClient will pick the address it finds
  * suitable for using.
  *
- * Using this utility function, the created client will be using UDA 1.0 and IPv4 only.
+ * Using this utility function, the created client will be using UDA 1.0 and
+ * IPv4 only.
+ *
+ * Deprecated: 1.6. Use [ctor@GSSDP.Client.new_for_address] instead.
  *
  * Return value: (nullable): A new #GSSDPClient object.
  **/
@@ -766,6 +806,8 @@ gssdp_client_new (const char *iface, GError **error)
  *
  * Using this utility function, the created client will be using UDA 1.0 and IPv4 only.
  *
+ * Deprecated: 1.6. Use [ctor@GSSDP.Client.new_for_address] instead.
+ *
  * Return value: (nullable):  A new #GSSDPClient object or %NULL on error.
  */
 GSSDPClient *
@@ -776,9 +818,76 @@ gssdp_client_new_with_port (const char *iface,
         return g_initable_new (GSSDP_TYPE_CLIENT,
                                NULL,
                                error,
-                               "interface", iface,
-                               "msearch-port", msearch_port,
+                               "interface",
+                               iface,
+                               "port",
+                               msearch_port,
                                NULL);
+}
+
+/**
+ * gssdp_client_new_full:
+ * @iface: (nullable): the name of a network interface
+ * @addr: (nullable): an IP address or %NULL for auto-detection. If you do not
+ * care about the address, but want to specify an address family, use
+ * [ctor@Glib.InetAddress.new_any] with the appropriate family instead.
+ * @port: The network port to use for M-SEARCH requests or 0 for
+ * random.
+ * @uda_version: The UDA version this client will adhere to
+ * @error: (allow-none): Location to store error, or %NULL.
+ *
+ * Creates a GSSDP client with address @addr. If none is specified, GSSDP
+ * will chose the address it deems most suitable.
+ *
+ * Since: 1.6.
+ *
+ * Return value: (nullable):  A new #GSSDPClient object or %NULL on error.
+ */
+GSSDPClient *
+gssdp_client_new_full (const char *iface,
+                       GInetAddress *addr,
+                       guint16 port,
+                       GSSDPUDAVersion uda_version,
+                       GError **error)
+{
+        return g_initable_new (GSSDP_TYPE_CLIENT,
+                               NULL,
+                               error,
+                               "interface",
+                               iface,
+                               "address",
+                               addr,
+                               "port",
+                               port,
+                               "uda-version",
+                               uda_version,
+                               NULL);
+}
+
+/**
+ * gssdp_client_new_for_address
+ * @addr: (nullable): an IP address or %NULL for auto-detection. If you do not
+ * care about the address, but want to specify an address family, use
+ * [ctor@Glib.InetAddress.new_any] with the appropriate family instead.
+ * @port: The network port to use for M-SEARCH requests or 0 for
+ * random.
+ * @uda_version: The UDA version this client will adhere to
+ * @error: (allow-none): Location to store error, or %NULL.
+ *
+ * Creates a GSSDP client with address @addr. If none is specified, GSSDP
+ * will chose the address it deems most suitable.
+ *
+ * Since: 1.6.
+ *
+ * Return value: (nullable):  A new #GSSDPClient object or %NULL on error.
+ */
+GSSDPClient *
+gssdp_client_new_for_address (GInetAddress *addr,
+                              guint16 port,
+                              GSSDPUDAVersion uda_version,
+                              GError **error)
+{
+        return gssdp_client_new_full (NULL, addr, port, uda_version, error);
 }
 
 /**
@@ -864,8 +973,9 @@ gssdp_client_get_host_ip (GSSDPClient *client)
         priv = gssdp_client_get_instance_private (client);
 
         if (priv->device.host_ip == NULL)
-                priv->device.host_ip = g_inet_address_to_string
-                                    (priv->device.host_addr);
+                if (priv->device.host_addr != NULL)
+                        priv->device.host_ip = g_inet_address_to_string
+                                            (priv->device.host_addr);
 
         return priv->device.host_ip;
 }
@@ -1129,7 +1239,7 @@ gssdp_client_clear_headers (GSSDPClient *client)
 }
 
 /**
- * gssdp_client_get_address:
+ * gssdp_client_get_address:(attributes org.gtk.Method.get_property=address):
  * @client: A #GSSDPClient
  *
  * The IP address this client works on.
@@ -1287,12 +1397,23 @@ gssdp_client_can_reach (GSSDPClient *client, GInetSocketAddress *address)
         GSSDPClientPrivate *priv = gssdp_client_get_instance_private (client);
 
         GInetAddress *addr = g_inet_socket_address_get_address (address);
-        if (g_inet_address_get_is_link_local (addr)) {
+        if (g_inet_address_get_is_link_local (addr) &&
+            g_inet_address_get_family (addr) == G_SOCKET_FAMILY_IPV6) {
                 return g_inet_socket_address_get_scope_id (address) ==
                        priv->device.index;
         }
 
         return g_inet_address_mask_matches (priv->device.host_mask, addr);
+}
+
+guint
+gssdp_client_get_port (GSSDPClient *client)
+{
+        g_return_val_if_fail (GSSDP_IS_CLIENT (client), 0);
+
+        GSSDPClientPrivate *priv = gssdp_client_get_instance_private (client);
+
+        return priv->msearch_port;
 }
 
 /**
@@ -1384,8 +1505,11 @@ _gssdp_client_get_mcast_group (GSSDPClient *client)
                  * address to use the proper multicast group */
                 if (g_inet_address_get_is_link_local (priv->device.host_addr)) {
                             return SSDP_V6_LL;
+                } else if (g_inet_address_get_is_site_local (
+                                   priv->device.host_addr)) {
+                        return SSDP_V6_SL;
                 } else {
-                            return SSDP_V6_SL;
+                        return SSDP_V6_GL;
                 }
         }
 }
@@ -1420,10 +1544,15 @@ _gssdp_client_get_mcast_group_addr (GSSDPClient *client)
                             ENSURE_V6_GROUP(LL);
 
                             return SSDP_V6_LL_ADDR;
-                } else {
-                            ENSURE_V6_GROUP(SL);
+                } else if (g_inet_address_get_is_site_local (
+                                   priv->device.host_addr)) {
+                        ENSURE_V6_GROUP (SL);
 
-                            return SSDP_V6_SL_ADDR;
+                        return SSDP_V6_SL_ADDR;
+                } else {
+                        ENSURE_V6_GROUP (GL);
+
+                        return SSDP_V6_GL_ADDR;
                 }
         }
 }
@@ -1497,7 +1626,7 @@ parse_http_request (char                *buf,
 
                 return TRUE;
         } else {
-                soup_message_headers_free (*headers);
+                soup_message_headers_unref (*headers);
                 *headers = NULL;
 
                 g_free (path);
@@ -1528,8 +1657,7 @@ parse_http_response (char                *buf,
 
                 return TRUE;
         } else {
-                soup_message_headers_free (*headers);
-                *headers = NULL;
+                g_clear_pointer (headers, soup_message_headers_unref);
 
                 return FALSE;
         }
@@ -1606,19 +1734,29 @@ socket_source_cb (GSSDPSocketSource *socket_source, GSSDPClient *client)
                                 msg = GSSDP_PKTINFO6_MESSAGE (messages[i]);
                                 msg_ifindex = gssdp_pktinfo6_message_get_ifindex (msg);
                                 local_addr = gssdp_pktinfo6_message_get_local_addr (msg);
-                        } else
+                        } else {
                                 continue;
+                        }
 
                         /* message needs to be on correct interface or on
                          * loopback (as kernel can be smart and route things
                          * there even if sent to another network) */
-                        if (!((msg_ifindex == priv->device.index ||
-                               msg_ifindex == LOOPBACK_IFINDEX) &&
-                              (g_inet_address_equal (local_addr,
-                                                     priv->device.host_addr) ||
-                               g_inet_address_equal (local_addr, group_addr)))) {
-                                goto out;
-                        } else {
+                        if (g_inet_address_equal (local_addr, group_addr)) {
+                                // This is a multicast packet. If the index is not our index, ignore
+                                if (msg_ifindex != priv->device.index) {
+                                        goto out;
+                                }
+                                break;
+                        }
+
+                        if (g_inet_address_equal (local_addr,
+                                                  priv->device.host_addr)) {
+                                // This is a "normal" packet. We can receive those
+
+                                if (msg_ifindex != priv->device.index &&
+                                    msg_ifindex != LOOPBACK_IFINDEX) {
+                                        goto out;
+                                }
                                 break;
                         }
                 }
@@ -1709,7 +1847,7 @@ out:
 
         g_free (ip_string);
 
-        g_clear_pointer (&headers, soup_message_headers_free);
+        g_clear_pointer (&headers, soup_message_headers_unref);
         g_clear_object (&address);
 
         if (messages) {
@@ -1838,17 +1976,53 @@ static gboolean
 init_network_info (GSSDPClient *client, GError **error)
 {
         GSSDPClientPrivate *priv = gssdp_client_get_instance_private (client);
-        gboolean ret = TRUE;
+
+        /* If we were constructed with a host_ip, try to parse a host_addr from that.
+         * Further code will only work with host_addr */
+        if (priv->device.host_ip != NULL) {
+                GInetAddress *addr =
+                        g_inet_address_new_from_string (priv->device.host_ip);
+                if (addr == NULL) {
+                        g_set_error (error,
+                                     GSSDP_ERROR,
+                                     GSSDP_ERROR_FAILED,
+                                     "Unparseable host_ip %s",
+                                     priv->device.host_ip);
+
+                        return FALSE;
+                }
+
+                // If there was also a host address passed (why?!) make sure
+                // they match up, otherwise exit with error as well
+                if (priv->device.host_addr != NULL) {
+                        gboolean equal =
+                                g_inet_address_equal (priv->device.host_addr,
+                                                      addr);
+                        g_object_unref (addr);
+                        if (!equal) {
+                                g_set_error_literal (
+                                        error,
+                                        GSSDP_ERROR,
+                                        GSSDP_ERROR_FAILED,
+                                        "host_ip and host_addr do not match");
+                                return FALSE;
+                        }
+
+                } else {
+                        priv->device.host_addr = addr;
+                }
+
+        }
 
         /* Either interface name or host_ip wasn't given during construction.
          * If one is given, try to find the other, otherwise just pick an
          * interface.
          */
-        if (priv->device.iface_name == NULL ||
-            priv->device.host_addr == NULL  ||
-            priv->device.host_mask == NULL)
-                gssdp_net_get_host_ip (&(priv->device));
-        else {
+        if (priv->device.iface_name == NULL || priv->device.host_addr == NULL ||
+            priv->device.host_mask == NULL) {
+                if (!gssdp_net_get_host_ip (&(priv->device), error))
+                        return FALSE;
+        } else {
                 /* Ugly. Ideally, get_host_ip needs to be run everytime, but
                  * it is currently to stupid so just query index here if we
                  * have a name and an interface already.
@@ -1869,7 +2043,7 @@ init_network_info (GSSDPClient *client, GError **error)
                                      GSSDP_ERROR_FAILED,
                                      "No default route?");
 
-                ret = FALSE;
+                return FALSE;
         } else if (priv->device.host_addr == NULL) {
                 g_set_error (error,
                              GSSDP_ERROR,
@@ -1877,22 +2051,24 @@ init_network_info (GSSDPClient *client, GError **error)
                              "Failed to find IP of interface %s",
                              priv->device.iface_name);
 
-                ret = FALSE;
+                return FALSE;
         } else if (priv->device.host_mask == NULL) {
                 g_set_error (error,
                              GSSDP_ERROR,
                              GSSDP_ERROR_FAILED,
                              "No network mask?");
-                ret = FALSE;
+                return FALSE;
         }
 
-        g_debug ("Created SSDP client 0x%p", client);
+        g_debug ("Created SSDP client %p", client);
         g_debug ("  iface_name : %s", priv->device.iface_name);
         g_debug ("  host_ip    : %s", gssdp_client_get_host_ip (client));
+        g_debug ("  port       : %u", gssdp_client_get_port (client));
         g_debug ("  server_id  : %s", priv->server_id);
         g_debug ("  network    : %s", priv->device.network);
-        g_debug ("  host_addr  : 0x%p", priv->device.host_addr);
-        g_debug ("  host_mask  : 0x%p", priv->device.host_mask);
+        g_debug ("  index      : %d", priv->device.index);
+        g_debug ("  host_addr  : %p", priv->device.host_addr);
+        g_debug ("  host_mask  : %p", priv->device.host_mask);
 
-        return ret;
+        return TRUE;
 }

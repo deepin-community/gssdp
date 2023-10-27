@@ -12,6 +12,7 @@
 #include <config.h>
 
 #include "gssdp-net.h"
+#include "gssdp-error.h"
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -184,8 +185,8 @@ gssdp_net_mac_lookup (GSSDPNetworkDevice *device, const char *ip_address)
 
                         msg = NLMSG_DATA (header);
 
-                        rtattr = IFA_RTA (msg);
-                        rtattr_len = IFA_PAYLOAD (header);
+                        rtattr = RTM_RTA (msg);
+                        rtattr_len = RTM_PAYLOAD (header);
 
                         while (RT_ATTR_OK (rtattr, rtattr_len)) {
                                 if (rtattr->rta_type == NDA_DST) {
@@ -389,7 +390,7 @@ get_netmask (struct sockaddr *address,
 
 
 gboolean
-gssdp_net_get_host_ip (GSSDPNetworkDevice *device)
+gssdp_net_get_host_ip (GSSDPNetworkDevice *device, GError **error)
 {
         struct ifaddrs *ifa_list, *ifa;
         GList *up_ifaces, *ifaceptr;
@@ -398,9 +399,15 @@ gssdp_net_get_host_ip (GSSDPNetworkDevice *device)
 
         up_ifaces = NULL;
 
+        errno = 0;
         if (getifaddrs (&ifa_list) != 0) {
-                g_warning ("Failed to retrieve list of network interfaces: %s",
-                           strerror (errno));
+                int saved_errno = errno;
+                g_set_error (
+                        error,
+                        G_IO_ERROR,
+                        g_io_error_from_errno (saved_errno),
+                        "Failed to retrieve list of network interfaces: %s",
+                        g_strerror (errno));
 
                 return FALSE;
         }
@@ -461,17 +468,9 @@ gssdp_net_get_host_ip (GSSDPNetworkDevice *device)
          */
         if (device->host_addr) {
                 family = g_inet_address_get_family (device->host_addr);
-                if (family == G_SOCKET_FAMILY_IPV6 &&
-                    !g_inet_address_get_is_link_local (device->host_addr) &&
-                    !g_inet_address_get_is_site_local (device->host_addr) &&
-                    !g_inet_address_get_is_loopback (device->host_addr)) {
-                        char *addr = g_inet_address_to_string (device->host_addr);
-                        /* FIXME: Discard the address, but use the interface */
-                        g_warning("Invalid IP address given: %s, discarding",
-                                        addr);
-                        g_free (addr);
+                // Address was solely added to select the address family
+                if (g_inet_address_get_is_any (device->host_addr))
                         g_clear_object (&device->host_addr);
-                }
         }
 
         for (ifaceptr = up_ifaces;
@@ -495,20 +494,7 @@ gssdp_net_get_host_ip (GSSDPNetworkDevice *device)
                 if (device->host_addr == NULL) {
                         switch (ifa->ifa_addr->sa_family) {
                         case AF_INET:
-                                /* legacy IP: Easy, just take the first
-                                 * address we can find */
-                                device->host_addr = g_object_ref (device_addr);
-                                break;
                         case AF_INET6:
-                                /* IP: Bit more complicated. We have to select a link-local or
-                                 * ULA address */
-                                if (!g_inet_address_get_is_link_local (device_addr) &&
-                                    !g_inet_address_get_is_site_local (device_addr)) {
-                                        g_clear_object (&device_addr);
-
-                                        continue;
-                                }
-
                                 device->host_addr = g_object_ref (device_addr);
                                 break;
                         default:
@@ -524,11 +510,27 @@ gssdp_net_get_host_ip (GSSDPNetworkDevice *device)
                 if (!equal)
                         continue;
 
-                device->host_mask = get_netmask (ifa->ifa_addr,
-                                                 ifa->ifa_netmask);
+                if (device->host_mask != NULL &&
+                    !g_inet_address_mask_matches (device->host_mask,
+                                                  device->host_addr)) {
+                        g_clear_object (&device->host_mask);
+                }
+
+                if (device->host_mask == NULL) {
+                        device->host_mask =
+                                get_netmask (ifa->ifa_addr, ifa->ifa_netmask);
+                }
 
                 if (device->iface_name == NULL)
                         device->iface_name = g_strdup (ifa->ifa_name);
+                else {
+                        // We have found the address, and we have an iface. Does it match?
+                        if (!g_str_equal (device->iface_name, ifa->ifa_name)) {
+                                g_set_error(error, GSSDP_ERROR, GSSDP_ERROR_FAILED, "Information mismatch: Interface passed address is %s, but requested %s",
+                                             device->iface_name, ifa->ifa_name);
+                                return FALSE;
+                        }
+                }
 
                 if (device->network == NULL)
                         device->network = g_inet_address_mask_to_string (device->host_mask);
