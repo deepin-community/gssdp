@@ -1,4 +1,4 @@
-project('gssdp', 'c', version: '1.6.2', meson_version : '>= 0.54.0')
+project('gssdp', 'c', version: '1.6.4', meson_version : '>= 0.54.0', default_options: ['c_std=gnu11'])
 gnome = import('gnome')
 pkg = import('pkgconfig')
 
@@ -94,6 +94,7 @@ endif
 
 gidocgen_dep = dependency('gi-docgen', version: '>= 2021.1',
                           fallback: ['gi-docgen', 'dummy_dep'],
+                          native: true,
                           required: get_option('gtk_doc') and get_option('introspection')
                       )
 

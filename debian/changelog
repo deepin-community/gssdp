@@ -1,3 +1,28 @@
+gssdp (1.6.4-1~deb13u1) trixie; urgency=medium
+
+  * New upstream bugfix release
+    - Improve reproducibility of gssdp-enums.c
+    - Fix issues with Since: and Deprecated: declarations in documentation
+      (Closes: #1111683)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Wed, 20 Aug 2025 22:24:04 -0400
+
+gssdp (1.6.3-2) unstable; urgency=medium
+
+  * Update gir handling
+  * Remove ancient Breaks/Replaces
+  * Bump Standards Version to 4.7.0
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sat, 22 Mar 2025 09:21:18 -0400
+
+gssdp (1.6.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 4.6.2
+  * Stop using debian/control.in and dh-sequence-gnome
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 27 Nov 2023 10:21:56 -0500
+
 gssdp (1.6.2-2) unstable; urgency=medium
 
   * Don't build gssdp-tools on i386 since pandoc isn't available there on Ubuntu
