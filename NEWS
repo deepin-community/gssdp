@@ -1,3 +1,31 @@
+1.6.4 (stable)
+==============
+ - Fix build path leaking into code
+ - Fix issues with Since: and Deprecated: declarations in documentation
+
+Bugs fixed in this release:
+ - https://gitlab.gnome.org/GNOME/gssdp/-/merge_requests/15
+ - https://gitlab.gnome.org/GNOME/gssdp/-/issues/29
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+ - Simon McVittie <smcv@debian.org>
+ - Jordan Petridis <jpetridis@gnome.org>
+ - Bartłomiej Piotrowski <b@bpiotrowski.pl>
+ - Markus Volk <f_l_k@t-online.de>
+
+1.6.3 (stable)
+==============
+ - Do not crash if socket receive fails
+ - Do not leak local address in SocketSource
+
+Bugs fixed in this release:
+ - https://gitlab.gnome.org/GNOME/gssdp/issues/12
+
+All contributors to this release:
+ - Jens Georg <mail@jensge.org>
+ - Colin <colin@uninsane.org>
+
 1.6.2 (stable)
 ==============
  - Propagate random port up to client, partial fix for GUPnP/81
